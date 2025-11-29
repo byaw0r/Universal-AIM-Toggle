@@ -176,4 +176,4 @@ UserInputService.InputChanged:Connect(function(input)
     end
 end)
 
-print("BYW AIMBOT SCRIPT loaded!")
+print("BYW SCRIPT loaded!")
