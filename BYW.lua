@@ -10,97 +10,118 @@ screenGui.Name = "AimbotMenu"
 screenGui.Parent = player.PlayerGui
 screenGui.ResetOnSpawn = false
 
-local aimbotBtn = Instance.new("TextButton")
-aimbotBtn.Name = "AimbotBtn"
-aimbotBtn.Size = UDim2.new(0, 40, 0, 40)
-aimbotBtn.Position = UDim2.new(0, 10, 0, 10)
-aimbotBtn.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-aimbotBtn.TextColor3 = Color3.fromRGB(0, 0, 0)
-aimbotBtn.Text = "AIM"
-aimbotBtn.TextSize = 24
-aimbotBtn.Font = Enum.Font.GothamBold
-aimbotBtn.BorderSizePixel = 0
-aimbotBtn.Active = true
-aimbotBtn.Draggable = true
-aimbotBtn.Parent = screenGui
+local AimBotBtn = Instance.new("TextButton")
+AimBotBtn.Name = "AimBotBtn"
+AimBotBtn.Size = UDim2.new(0, 40, 0, 40)
+AimBotBtn.Position = UDim2.new(0, 10, 0, 10)
+AimBotBtn.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+AimBotBtn.TextColor3 = Color3.fromRGB(0, 0, 0)
+AimBotBtn.Text = "AIM"
+AimBotBtn.TextSize = 24
+AimBotBtn.Font = Enum.Font.GothamBold
+AimBotBtn.BorderSizePixel = 0
+AimBotBtn.Active = true
+AimBotBtn.Draggable = true
+AimBotBtn.Parent = screenGui
 
 local UICorner = Instance.new("UICorner")
 UICorner.CornerRadius = UDim.new(0, 12)
-UICorner.Parent = aimbotBtn
+UICorner.Parent = AimBotBtn
 
-local function isVisible(targetPart)
-    local localPlayer = game.Players.LocalPlayer
-    local character = localPlayer.Character
-    if not character or not character:FindFirstChild("HumanoidRootPart") then return false end
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local Camera = workspace.CurrentCamera
+local LocalPlayer = Players.LocalPlayer
+
+local function isVisible(target)
+    local localChar = LocalPlayer.Character
+    local targetChar = target.Character
+    if not localChar or not targetChar then return false end
     
-    local origin = character.HumanoidRootPart.Position
-    local target = targetPart.Position
-    local direction = (target - origin).Unit
+    local targetHead = targetChar:FindFirstChild("Head")
+    if not targetHead then return false end
+    
+    local origin = Camera.CFrame.Position
+    local targetPos = targetHead.Position
+    
+    local direction = (targetPos - origin).Unit
+    local distance = (targetPos - origin).Magnitude
     
     local raycastParams = RaycastParams.new()
     raycastParams.FilterType = Enum.RaycastFilterType.Blacklist
-    raycastParams.FilterDescendantsInstances = {character}
+    raycastParams.FilterDescendantsInstances = {localChar, targetChar}
     
-    local raycastResult = workspace:Raycast(origin, direction * 500, raycastParams)
+    local raycastResult = workspace:Raycast(origin, direction * distance, raycastParams)
     
     if raycastResult then
-        local hitPart = raycastResult.Instance
-        return hitPart:IsDescendantOf(targetPart.Parent)
+        local hitModel = raycastResult.Instance:FindFirstAncestorOfClass("Model")
+        if hitModel == targetChar then
+            return true
+        end
+        return false
     end
     
     return true
 end
 
-local function findNearestEnemy()
-    local localPlayer = game.Players.LocalPlayer
-    local character = localPlayer.Character
-    if not character or not character:FindFirstChild("HumanoidRootPart") then return nil end
+local function getClosestPlayer()
+    local closestPlayer = nil
+    local closestDistance = math.huge
     
-    local nearestEnemy = nil
-    local nearestDistance = math.huge
-    local localRoot = character.HumanoidRootPart
-    
-    for _, player in pairs(game.Players:GetPlayers()) do
-        if player ~= localPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") and player.Character:FindFirstChild("Head") and player.Character:FindFirstChild("Humanoid") and player.Character.Humanoid.Health > 0 then
-            local enemyRoot = player.Character.HumanoidRootPart
-            local enemyHead = player.Character.Head
-            local distance = (localRoot.Position - enemyRoot.Position).Magnitude
+    for _, player in pairs(Players:GetPlayers()) do
+        if player == LocalPlayer then continue end
+        
+        local char = player.Character
+        if char and char:FindFirstChild("Head") and char:FindFirstChild("Humanoid") and char.Humanoid.Health > 0 then
+            local head = char.Head
+            local headPos, onScreen = Camera:WorldToViewportPoint(head.Position)
             
-            if distance < nearestDistance and isVisible(enemyHead) then
-                nearestEnemy = enemyHead
-                nearestDistance = distance
+            if onScreen and isVisible(player) then
+                local distanceToPlayer = (head.Position - Camera.CFrame.Position).Magnitude
+                
+                if distanceToPlayer < closestDistance then
+                    closestPlayer = player
+                    closestDistance = distanceToPlayer
+                end
             end
         end
     end
     
-    return nearestEnemy
+    return closestPlayer
 end
 
-local function aimAtTarget(targetHead)
-    if not targetHead then return end
+local function aimAtTarget(target)
+    if not target or not target.Character then return end
+    local head = target.Character:FindFirstChild("Head")
+    if not head then return end
     
-    local camera = workspace.CurrentCamera
-    if camera then
-        camera.CFrame = CFrame.new(camera.CFrame.Position, targetHead.Position)
-    end
+    local currentCamera = workspace.CurrentCamera
+    if not currentCamera then return end
+    
+    local targetPosition = head.Position
+    local cameraPosition = currentCamera.CFrame.Position
+    local direction = (targetPosition - cameraPosition).Unit
+    
+    currentCamera.CFrame = CFrame.lookAt(cameraPosition, cameraPosition + direction)
 end
 
 local function toggleAimbot()
     aimbotEnabled = not aimbotEnabled
     
     if aimbotEnabled then
-        aimbotBtn.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
-        aimbotBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-        aimbotConnection = game:GetService("RunService").RenderStepped:Connect(function()
-            local nearestEnemy = findNearestEnemy()
-            if nearestEnemy then
-                aimAtTarget(nearestEnemy)
+        AimBotBtn.BackgroundColor3 = Color3.fromRGB(255, 0, 0) -- Исправлено на AimBotBtn
+        AimBotBtn.TextColor3 = Color3.fromRGB(255, 255, 255) -- Исправлено на AimBotBtn
+        aimbotConnection = RunService.RenderStepped:Connect(function()
+            local closestPlayer = getClosestPlayer()
+            if closestPlayer then
+                aimAtTarget(closestPlayer)
             end
         end)
         print("AimBot: ON")
     else
-        aimbotBtn.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-        aimbotBtn.TextColor3 = Color3.fromRGB(0, 0, 0)
+        AimBotBtn.BackgroundColor3 = Color3.fromRGB(255, 255, 255) -- Исправлено на AimBotBtn
+        AimBotBtn.TextColor3 = Color3.fromRGB(0, 0, 0) -- Исправлено на AimBotBtn
         if aimbotConnection then
             aimbotConnection:Disconnect()
             aimbotConnection = nil
@@ -109,9 +130,9 @@ local function toggleAimbot()
     end
 end
 
-aimbotBtn.MouseButton1Click:Connect(toggleAimbot)
+AimBotBtn.MouseButton1Click:Connect(toggleAimbot) -- Исправлено на AimBotBtn
 
-game:GetService("UserInputService").InputBegan:Connect(function(input, gameProcessed)
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
     if gameProcessed then return end
     
     if input.KeyCode == Enum.KeyCode.V then
@@ -126,14 +147,14 @@ local startPos
 
 local function update(input)
     local delta = input.Position - dragStart
-    aimbotBtn.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+    AimBotBtn.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y) -- Исправлено на AimBotBtn
 end
 
-aimbotBtn.InputBegan:Connect(function(input)
+AimBotBtn.InputBegan:Connect(function(input) -- Исправлено на AimBotBtn
     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
         dragging = true
         dragStart = input.Position
-        startPos = aimbotBtn.Position
+        startPos = AimBotBtn.Position -- Исправлено на AimBotBtn
         
         input.Changed:Connect(function()
             if input.UserInputState == Enum.UserInputState.End then
@@ -143,13 +164,13 @@ aimbotBtn.InputBegan:Connect(function(input)
     end
 end)
 
-aimbotBtn.InputChanged:Connect(function(input)
+AimBotBtn.InputChanged:Connect(function(input) -- Исправлено на AimBotBtn
     if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
         dragInput = input
     end
 end)
 
-game:GetService("UserInputService").InputChanged:Connect(function(input)
+UserInputService.InputChanged:Connect(function(input)
     if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.TouchMovement) then
         update(input)
     end
